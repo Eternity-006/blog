@@ -16,7 +16,7 @@ const error = ref('')
 onMounted(async () => {
   try {
     const slug = route.params.slug as string
-    const res = await fetch('/posts-index.json')
+    const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
     const posts: Post[] = await res.json()
     const found = posts.find(p => p.slug === slug)
 

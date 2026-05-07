@@ -18,7 +18,7 @@ const posts = computed(() =>
 
 onMounted(async () => {
   try {
-    const res = await fetch('/posts-index.json')
+    const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
     allPosts.value = await res.json()
   } finally {
     loading.value = false

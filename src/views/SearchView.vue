@@ -13,7 +13,7 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await fetch('/posts-index.json')
+    const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
     allPosts.value = await res.json()
     setPosts(allPosts.value)
   } finally {

@@ -8,7 +8,7 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await fetch('/posts-index.json')
+    const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
     posts.value = await res.json()
     posts.value.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   } catch {
