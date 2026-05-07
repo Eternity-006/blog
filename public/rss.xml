@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>我的博客</title>
+    <link>https://yourblog.vercel.app</link>
+    <description>记录前端开发与技术探索</description>
+    <language>zh-CN</language>
+    <atom:link href="https://yourblog.vercel.app/rss.xml" rel="self" type="application/rss+xml"/>
+    
+    <item>
+      <title><![CDATA[Vue 3 Composition API 实战进阶]]></title>
+      <link>https://yourblog.vercel.app/post/getting-started-vue3-composition-api</link>
+      <guid>https://yourblog.vercel.app/post/getting-started-vue3-composition-api</guid>
+      <pubDate>Fri, 01 May 2026 00:00:00 GMT</pubDate>
+      <category>前端</category>
+      <description><![CDATA[从实际场景出发，深入掌握 Vue 3 Composition API 的高级用法：数据请求、表单处理、事件总线组合函数及状态管理。]]></description>
+    </item>
+    <item>
+      <title><![CDATA[从零实现 Markdown 博客系统]]></title>
+      <link>https://yourblog.vercel.app/post/building-blog-markdown-vite</link>
+      <guid>https://yourblog.vercel.app/post/building-blog-markdown-vite</guid>
+      <pubDate>Tue, 28 Apr 2026 00:00:00 GMT</pubDate>
+      <category>教程</category>
+      <description><![CDATA[手把手还原本博客的完整实现过程：构建脚本设计、Markdown 渲染管线、代码高亮配置、全文搜索及部署全流程。]]></description>
+    </item>
+    <item>
+      <title><![CDATA[Vue 3 开发中不可不知的 TypeScript 高级模式]]></title>
+      <link>https://yourblog.vercel.app/post/typescript-tips-vue-developers</link>
+      <guid>https://yourblog.vercel.app/post/typescript-tips-vue-developers</guid>
+      <pubDate>Mon, 20 Apr 2026 00:00:00 GMT</pubDate>
+      <category>前端</category>
+      <description><![CDATA[从泛型组件、可辨识联合类型到类型安全的 Provide/Inject 和 Emits 声明，全面提升 Vue 项目的类型覆盖率和代码健壮性。]]></description>
+    </item>
+    <item>
+      <title><![CDATA[CSS Grid 与 Flexbox 实战布局指南]]></title>
+      <link>https://yourblog.vercel.app/post/css-grid-vs-flexbox</link>
+      <guid>https://yourblog.vercel.app/post/css-grid-vs-flexbox</guid>
+      <pubDate>Wed, 15 Apr 2026 00:00:00 GMT</pubDate>
+      <category>CSS</category>
+      <description><![CDATA[用四个真实页面布局案例，彻底掌握 Grid 和 Flexbox 的配合之道：经典三段式、卡片瀑布流、仪表盘栅格及居中方案全对比。]]></description>
+    </item>
+  </channel>
+</rss>
