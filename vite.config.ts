@@ -5,6 +5,7 @@ import { resolve } from 'path'
 import { postApi } from './scripts/post-api'
 
 export default defineConfig({
+  base: '/blog/',
   plugins: [vue(), tailwindcss(), postApi()],
   resolve: {
     alias: {
