@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import type { PostMeta } from '@/types/post'
 import PostList from '@/components/PostList.vue'
+import { api } from '@/api'
 
 const route = useRoute()
 const username = route.params.username as string
@@ -13,7 +14,7 @@ const error = ref('')
 
 onMounted(async () => {
   try {
-    const res = await fetch(`/api/users/${encodeURIComponent(username)}`)
+    const res = await api(`/api/users/${encodeURIComponent(username)}`)
     if (res.ok) {
       const data = await res.json()
       userInfo.value = data.user

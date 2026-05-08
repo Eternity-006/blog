@@ -47,3 +47,11 @@ export function extractAllCategories(posts: { category: string }[]): string[] {
   posts.forEach(p => catSet.add(p.category))
   return [...catSet].sort()
 }
+
+export function estimateReadingTime(text: string): number {
+  // Chinese: ~400 chars/min, English: ~200 words/min
+  const chineseChars = (text.match(/[一-鿿]/g) || []).length
+  const englishWords = (text.replace(/[一-鿿]/g, '').match(/[a-zA-Z]+/g) || []).length
+  const minutes = Math.ceil(chineseChars / 400 + englishWords / 200)
+  return Math.max(1, minutes)
+}

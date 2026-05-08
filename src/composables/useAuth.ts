@@ -1,4 +1,5 @@
 import { ref, computed } from 'vue'
+import { api } from '@/api'
 
 interface User {
   id: number
@@ -17,7 +18,7 @@ export function useAuth() {
 
   async function login(username: string, password: string): Promise<string | null> {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await api('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -38,7 +39,7 @@ export function useAuth() {
 
   async function register(username: string, password: string): Promise<string | null> {
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await api('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -67,7 +68,7 @@ export function useAuth() {
   async function checkAuth(): Promise<boolean> {
     if (!token.value) return false
     try {
-      const res = await fetch('/api/auth/me', {
+      const res = await api('/api/auth/me', {
         headers: { 'Authorization': `Bearer ${token.value}` },
       })
       if (!res.ok) {

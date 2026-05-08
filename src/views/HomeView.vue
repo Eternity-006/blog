@@ -2,6 +2,8 @@
 import { ref, onMounted } from 'vue'
 import type { PostMeta } from '@/types/post'
 import PostList from '@/components/PostList.vue'
+import SkeletonCard from '@/components/SkeletonCard.vue'
+import { api } from '@/api'
 
 const posts = ref<PostMeta[]>([])
 const loading = ref(true)
@@ -14,7 +16,7 @@ async function fetchFromJson() {
 
 onMounted(async () => {
   try {
-    const res = await fetch('/api/posts')
+    const res = await api('/api/posts')
     if (res.ok) {
       posts.value = await res.json()
     } else {
@@ -31,14 +33,16 @@ onMounted(async () => {
 <template>
   <div>
     <section class="mb-10">
-      <h1 class="text-3xl sm:text-4xl font-bold mb-3">欢迎来到我的博客</h1>
+      <h1 class="text-3xl sm:text-4xl font-bold mb-3 bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent">
+        博客平台
+      </h1>
       <p class="text-gray-600 dark:text-gray-400 text-lg">
-        记录前端开发、技术探索与生活随想。
+        分享技术，记录生活，发现更多有趣的内容。
       </p>
     </section>
 
-    <div v-if="loading" class="text-center py-12 text-gray-500">
-      <p>加载文章中...</p>
+    <div v-if="loading" class="space-y-6">
+      <SkeletonCard v-for="i in 3" :key="i" />
     </div>
 
     <PostList v-else :posts="posts" />

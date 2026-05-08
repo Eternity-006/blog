@@ -1,23 +1,38 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { renderMarkdown, extractHeadings } from '@/utils/markdown'
+import { renderMarkdown, extractHeadings, estimateReadingTime } from '@/utils/markdown'
 import type { Post } from '@/types/post'
 import TagBadge from '@/components/TagBadge.vue'
 import TOC from '@/components/TOC.vue'
 import CommentSection from '@/components/CommentSection.vue'
+import { api } from '@/api'
+import { useCodeCopy } from '@/composables/useCodeCopy'
 
 const route = useRoute()
 const post = ref<Post | null>(null)
 const headings = ref<{ id: string; text: string; level: number }[]>([])
 const loading = ref(true)
 const error = ref('')
+const progress = ref(0)
+
+const readingTime = computed(() => {
+  if (!post.value?.content) return 1
+  return estimateReadingTime(post.value.content)
+})
+
+// Scroll progress
+function onScroll() {
+  const scrollTop = window.scrollY
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight
+  progress.value = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0
+}
 
 onMounted(async () => {
   const slug = route.params.slug as string
 
   try {
-    const res = await fetch(`/api/posts/${slug}`)
+    const res = await api(`/api/posts/${slug}`)
     if (res.ok) {
       const data = await res.json()
       const html = renderMarkdown(data.content)
@@ -28,7 +43,6 @@ onMounted(async () => {
       return
     }
   } catch {
-    // Fallback to static JSON
     try {
       const fallback = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
       const posts: Post[] = await fallback.json()
@@ -51,13 +65,28 @@ onMounted(async () => {
     el.id = id
   })
 
+  // Enable code copy buttons
+  useCodeCopy()
+
   document.title = `${post.value.title} | 博客平台`
   loading.value = false
+
+  window.addEventListener('scroll', onScroll, { passive: true })
 })
 </script>
 
 <template>
-  <div v-if="loading" class="text-center py-20 text-gray-500">加载文章中...</div>
+  <!-- Reading progress bar -->
+  <div class="fixed top-0 left-0 h-0.5 bg-gradient-to-r from-primary to-purple-500 z-[60] transition-all duration-150" :style="{ width: progress + '%' }" />
+
+  <div v-if="loading" class="text-center py-20">
+    <div class="animate-pulse space-y-4 max-w-2xl mx-auto">
+      <div class="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded mx-auto" />
+      <div class="h-8 w-3/4 bg-gray-200 dark:bg-gray-700 rounded mx-auto" />
+      <div class="h-4 w-1/2 bg-gray-200 dark:bg-gray-700 rounded mx-auto" />
+      <div class="h-64 bg-gray-100 dark:bg-gray-800 rounded-xl mt-8" />
+    </div>
+  </div>
 
   <div v-else-if="error" class="text-center py-20">
     <p class="text-red-500 text-lg mb-4">{{ error }}</p>
@@ -84,12 +113,13 @@ onMounted(async () => {
         </router-link>
         <span>|</span>
         <time :datetime="post?.date">{{ post?.date }}</time>
-        <span v-if="post?.views !== undefined">|</span>
-        <span v-if="post?.views !== undefined" class="text-gray-400">{{ post.views }} 次阅读</span>
         <span>|</span>
-        <span class="flex flex-wrap gap-1.5">
-          <TagBadge v-for="tag in post?.tags" :key="tag" :tag="tag" :clickable="true" />
-        </span>
+        <span>约 {{ readingTime }} 分钟</span>
+        <span v-if="post?.views !== undefined">|</span>
+        <span v-if="post?.views !== undefined">{{ post.views }} 次阅读</span>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-1.5">
+        <TagBadge v-for="tag in post?.tags" :key="tag" :tag="tag" :clickable="true" />
       </div>
     </header>
 

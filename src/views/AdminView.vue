@@ -3,10 +3,13 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { renderMarkdown } from '@/utils/markdown'
 import { useAuth } from '@/composables/useAuth'
+import { useToast } from '@/composables/useToast'
+import { api } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
 const { user, logout, authHeaders } = useAuth()
+const toast = useToast()
 
 const slug = ref('')
 const title = ref('')
@@ -17,7 +20,6 @@ const excerpt = ref('')
 const body = ref('')
 const publishStatus = ref<'published' | 'draft'>('published')
 const saving = ref(false)
-const message = ref('')
 const deleting = ref(false)
 
 const isEdit = computed(() => !!route.params.slug)
@@ -45,7 +47,7 @@ const myPosts = ref<{ slug: string; title: string; status: string }[]>([])
 onMounted(async () => {
   // Load my posts for quick edit
   try {
-    const res = await fetch('/api/my/posts', { headers: authHeaders() })
+    const res = await api('/api/my/posts', { headers: authHeaders() })
     if (res.ok) {
       const posts = await res.json()
       myPosts.value = posts.map((p: { slug: string; title: string; status: string }) => ({
@@ -57,7 +59,7 @@ onMounted(async () => {
   // Load existing post data if editing
   if (isEdit.value) {
     try {
-      const res = await fetch(`/api/posts/${route.params.slug}`)
+      const res = await api(`/api/posts/${route.params.slug}`)
       if (res.ok) {
         const data = await res.json()
         title.value = data.title
@@ -88,19 +90,18 @@ function buildPayload() {
 
 async function handleSave() {
   if (!slug.value || !title.value || !body.value) {
-    message.value = '请填写标题、Slug 和正文内容'
+    toast.error('请填写标题、Slug 和正文内容')
     return
   }
 
   saving.value = true
-  message.value = ''
 
   try {
     const isNew = !isEdit.value
     const url = isNew ? '/api/posts' : `/api/posts/${slug.value}`
     const method = isNew ? 'POST' : 'PUT'
 
-    const res = await fetch(url, {
+    const res = await api(url, {
       method,
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(buildPayload()),
@@ -109,15 +110,15 @@ async function handleSave() {
 
     if (res.ok) {
       const statusText = publishStatus.value === 'draft' ? '（草稿）' : ''
-      message.value = `文章保存成功！${statusText}`
+      toast.success(`文章保存成功！${statusText}`)
       if (isNew) {
         router.replace(`/admin/${data.slug}`)
       }
     } else {
-      message.value = `保存失败：${data.error}`
+      toast.error(`保存失败：${data.error}`)
     }
   } catch {
-    message.value = '网络错误，请确保后端已启动'
+    toast.error('网络错误，请确保后端已启动')
   } finally {
     saving.value = false
   }
@@ -129,20 +130,20 @@ async function handleDelete() {
 
   deleting.value = true
   try {
-    const res = await fetch(`/api/posts/${slug.value}`, {
+    const res = await api(`/api/posts/${slug.value}`, {
       method: 'DELETE',
       headers: authHeaders(),
     })
     const data = await res.json()
     if (data.ok) {
-      message.value = '文章已删除'
+      toast.success('文章已删除')
       router.replace('/admin')
       newPost()
     } else {
-      message.value = `删除失败：${data.error}`
+      toast.error(`删除失败：${data.error}`)
     }
   } catch {
-    message.value = '网络错误'
+    toast.error('网络错误')
   } finally {
     deleting.value = false
   }
@@ -157,7 +158,6 @@ function newPost() {
   excerpt.value = ''
   body.value = ''
   publishStatus.value = 'published'
-  message.value = ''
   router.replace('/admin')
 }
 
@@ -190,10 +190,6 @@ function handleLogout() {
         </button>
       </div>
     </div>
-
-    <p v-if="message" :class="message.includes('成功') || message.includes('已删除') ? 'text-green-600' : 'text-red-500'" class="mb-4 text-sm">
-      {{ message }}
-    </p>
 
     <!-- My posts quick select -->
     <div v-if="myPosts.length > 0" class="mb-6">

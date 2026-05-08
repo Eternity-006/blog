@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
+import { useToast } from '@/composables/useToast'
+import { api } from '@/api'
 
 const props = defineProps<{ postSlug: string }>()
 
@@ -13,17 +15,17 @@ interface Comment {
 }
 
 const { isLoggedIn, authHeaders } = useAuth()
+const toast = useToast()
 
 const comments = ref<Comment[]>([])
 const loading = ref(true)
 const author = ref('')
 const content = ref('')
 const submitting = ref(false)
-const message = ref('')
 
 async function fetchComments() {
   try {
-    const res = await fetch(`/api/comments/${props.postSlug}`)
+    const res = await api(`/api/comments/${props.postSlug}`)
     if (res.ok) comments.value = await res.json()
   } catch { /* backend unavailable */ }
   loading.value = false
@@ -33,13 +35,12 @@ onMounted(fetchComments)
 
 async function submitComment() {
   if (!content.value.trim()) {
-    message.value = '请输入评论内容'
+    toast.error('请输入评论内容')
     return
   }
   submitting.value = true
-  message.value = ''
   try {
-    const res = await fetch(`/api/comments/${props.postSlug}`, {
+    const res = await api(`/api/comments/${props.postSlug}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ author: author.value.trim(), content: content.value.trim() }),
@@ -51,17 +52,17 @@ async function submitComment() {
       author.value = ''
     } else {
       const data = await res.json()
-      message.value = data.error || '评论失败'
+      toast.error(data.error || '评论失败')
     }
   } catch {
-    message.value = '网络错误，请稍后再试'
+    toast.error('网络错误，请稍后再试')
   }
   submitting.value = false
 }
 
 async function deleteComment(id: number) {
   try {
-    const res = await fetch(`/api/comments/${id}`, {
+    const res = await api(`/api/comments/${id}`, {
       method: 'DELETE',
       headers: authHeaders(),
     })
@@ -125,7 +126,6 @@ function formatDate(d: string): string {
       <div class="flex items-center justify-between">
         <span class="text-xs text-gray-400">{{ content.length }}/2000</span>
         <div class="flex items-center gap-3">
-          <p v-if="message" class="text-xs text-red-500">{{ message }}</p>
           <button
             @click="submitComment"
             :disabled="submitting"

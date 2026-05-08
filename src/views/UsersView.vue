@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { api } from '@/api'
 
 interface UserInfo {
   id: number; username: string; bio: string; is_admin: boolean; created_at: string
@@ -10,7 +11,7 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await fetch('/api/users')
+    const res = await api('/api/users')
     if (res.ok) users.value = await res.json()
   } catch { /* ignore */ }
   loading.value = false

@@ -1,8 +1,15 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { PostMeta } from '@/types/post'
+import { estimateReadingTime } from '@/utils/markdown'
 import TagBadge from './TagBadge.vue'
 
-defineProps<{ post: PostMeta }>()
+const props = defineProps<{ post: PostMeta }>()
+
+const readingTime = computed(() => {
+  const excerpt = props.post.excerpt || ''
+  return estimateReadingTime(excerpt)
+})
 </script>
 
 <template>
@@ -40,11 +47,14 @@ defineProps<{ post: PostMeta }>()
       <TagBadge v-for="tag in post.tags" :key="tag" :tag="tag" :clickable="true" />
     </div>
 
-    <router-link
-      :to="`/post/${post.slug}`"
-      class="inline-block mt-4 text-sm font-medium text-primary hover:underline"
-    >
-      阅读全文 &rarr;
-    </router-link>
+    <div class="flex items-center justify-between mt-4">
+      <router-link
+        :to="`/post/${post.slug}`"
+        class="text-sm font-medium text-primary hover:underline"
+      >
+        阅读全文 &rarr;
+      </router-link>
+      <span class="text-xs text-gray-400">约 {{ readingTime }} 分钟</span>
+    </div>
   </article>
 </template>

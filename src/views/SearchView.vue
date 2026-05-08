@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router'
 import type { PostMeta } from '@/types/post'
 import { useSearch } from '@/composables/useSearch'
 import PostCard from '@/components/PostCard.vue'
+import SkeletonCard from '@/components/SkeletonCard.vue'
+import { api } from '@/api'
 
 const route = useRoute()
 const { searchQuery, results, setPosts } = useSearch()
@@ -12,7 +14,7 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await fetch('/api/posts')
+    const res = await api('/api/posts')
     if (res.ok) {
       allPosts.value = await res.json()
       setPosts(allPosts.value)
@@ -50,12 +52,14 @@ watch(() => route.query.q, (q) => {
         v-model="searchQuery"
         type="search"
         placeholder="搜索文章..."
-        class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
+        class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-lg transition-shadow"
         autofocus
       />
     </div>
 
-    <div v-if="loading" class="text-center py-12 text-gray-500">加载中...</div>
+    <div v-if="loading" class="space-y-6">
+      <SkeletonCard v-for="i in 3" :key="i" />
+    </div>
 
     <div v-else>
       <p v-if="searchQuery" class="text-sm text-gray-500 dark:text-gray-400 mb-4">

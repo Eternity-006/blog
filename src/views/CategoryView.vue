@@ -3,6 +3,8 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import type { PostMeta } from '@/types/post'
 import PostList from '@/components/PostList.vue'
+import SkeletonCard from '@/components/SkeletonCard.vue'
+import { api } from '@/api'
 
 const route = useRoute()
 const allPosts = ref<PostMeta[]>([])
@@ -18,7 +20,7 @@ const posts = computed(() =>
 
 onMounted(async () => {
   try {
-    const res = await fetch(`/api/posts?category=${encodeURIComponent(category.value)}`)
+    const res = await api(`/api/posts?category=${encodeURIComponent(category.value)}`)
     if (res.ok) {
       allPosts.value = await res.json()
       loading.value = false
@@ -43,7 +45,9 @@ onMounted(async () => {
     <h1 class="text-3xl font-bold mb-2">分类：{{ category }}</h1>
     <p class="text-gray-500 dark:text-gray-400 mb-8">共 {{ posts.length }} 篇文章</p>
 
-    <div v-if="loading" class="text-center py-12 text-gray-500">加载中...</div>
+    <div v-if="loading" class="space-y-6">
+      <SkeletonCard v-for="i in 2" :key="i" />
+    </div>
     <PostList v-else :posts="posts" />
   </div>
 </template>

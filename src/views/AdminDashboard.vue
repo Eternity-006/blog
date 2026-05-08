@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
+import { api } from '@/api'
 
 const { isAdmin, authHeaders } = useAuth()
 
@@ -28,9 +29,9 @@ async function fetchData() {
   try {
     const h = authHeaders()
     const [statsRes, usersRes, postsRes] = await Promise.all([
-      fetch('/api/admin/stats', { headers: h }),
-      fetch('/api/admin/users', { headers: h }),
-      fetch('/api/admin/posts', { headers: h }),
+      api('/api/admin/stats', { headers: h }),
+      api('/api/admin/users', { headers: h }),
+      api('/api/admin/posts', { headers: h }),
     ])
     if (statsRes.ok) stats.value = await statsRes.json()
     if (usersRes.ok) users.value = await usersRes.json()
@@ -44,7 +45,7 @@ onMounted(fetchData)
 async function toggleBan(user: AdminUser) {
   const newStatus = user.status === 'active' ? 'banned' : 'active'
   try {
-    const res = await fetch(`/api/admin/users/${user.id}`, {
+    const res = await api(`/api/admin/users/${user.id}`, {
       method: 'PUT',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus }),
@@ -59,7 +60,7 @@ async function toggleBan(user: AdminUser) {
 async function toggleAdmin(user: AdminUser) {
   if (user.is_admin && !confirm('确定要取消该用户的管理员权限吗？')) return
   try {
-    const res = await fetch(`/api/admin/users/${user.id}`, {
+    const res = await api(`/api/admin/users/${user.id}`, {
       method: 'PUT',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_admin: !user.is_admin }),
@@ -74,7 +75,7 @@ async function toggleAdmin(user: AdminUser) {
 async function deleteUser(user: AdminUser) {
   if (!confirm(`确定删除用户「${user.username}」及其所有文章吗？此操作不可撤销！`)) return
   try {
-    const res = await fetch(`/api/admin/users/${user.id}`, {
+    const res = await api(`/api/admin/users/${user.id}`, {
       method: 'DELETE',
       headers: authHeaders(),
     })
@@ -90,7 +91,7 @@ async function resetPassword(user: AdminUser) {
   const pw = prompt('输入新密码（至少3个字符）：')
   if (!pw || pw.length < 3) return
   try {
-    await fetch(`/api/admin/users/${user.id}`, {
+    await api(`/api/admin/users/${user.id}`, {
       method: 'PUT',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: pw }),
@@ -102,7 +103,7 @@ async function resetPassword(user: AdminUser) {
 async function deletePost(post: AdminPost) {
   if (!confirm(`确定删除文章「${post.title}」吗？`)) return
   try {
-    const res = await fetch(`/api/posts/${post.slug}`, {
+    const res = await api(`/api/posts/${post.slug}`, {
       method: 'DELETE',
       headers: authHeaders(),
     })

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppHeader from '@/components/AppHeader.vue'
+import Toast from '@/components/Toast.vue'
 </script>
 
 <template>
@@ -13,7 +14,8 @@ import AppHeader from '@/components/AppHeader.vue'
       </router-view>
     </main>
     <footer class="border-t border-gray-200 dark:border-gray-700 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-      <p>&copy; {{ new Date().getFullYear() }} 我的博客 — 基于 Vue + Vite 构建</p>
+      <p>&copy; {{ new Date().getFullYear() }} 博客平台 — 基于 Vue + Flask 构建</p>
     </footer>
+    <Toast />
   </div>
 </template>
