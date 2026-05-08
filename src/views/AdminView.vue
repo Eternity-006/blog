@@ -2,11 +2,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { renderMarkdown } from '@/utils/markdown'
+import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
+const { user, logout, authHeaders } = useAuth()
 
-// Form state
 const slug = ref('')
 const title = ref('')
 const date = ref(new Date().toISOString().split('T')[0])
@@ -14,12 +15,13 @@ const category = ref('')
 const tags = ref('')
 const excerpt = ref('')
 const body = ref('')
+const publishStatus = ref<'published' | 'draft'>('published')
 const saving = ref(false)
 const message = ref('')
+const deleting = ref(false)
 
 const isEdit = computed(() => !!route.params.slug)
 
-// Live preview
 const previewHtml = computed(() => {
   if (!body.value.trim()) return ''
   try {
@@ -29,7 +31,6 @@ const previewHtml = computed(() => {
   }
 })
 
-// Auto-generate slug from title
 watch(title, (val) => {
   if (!isEdit.value && val) {
     slug.value = val
@@ -39,65 +40,50 @@ watch(title, (val) => {
   }
 })
 
-// Pull existing posts for quick edit
-const existingPosts = ref<{ slug: string; title: string }[]>([])
-onMounted(async () => {
-  try {
-    const res = await fetch('/api/list-posts')
-    existingPosts.value = await res.json()
-  } catch { /* dev-only */ }
+const myPosts = ref<{ slug: string; title: string; status: string }[]>([])
 
-  // Load existing post if editing
+onMounted(async () => {
+  // Load my posts for quick edit
+  try {
+    const res = await fetch('/api/my/posts', { headers: authHeaders() })
+    if (res.ok) {
+      const posts = await res.json()
+      myPosts.value = posts.map((p: { slug: string; title: string; status: string }) => ({
+        slug: p.slug, title: p.title, status: p.status,
+      }))
+    }
+  } catch { /* ignore */ }
+
+  // Load existing post data if editing
   if (isEdit.value) {
     try {
-      const res = await fetch(`/api/get-post?slug=${route.params.slug}`)
-      const { content } = await res.json()
-
-      // Parse frontmatter
-      const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)/)
-      if (fmMatch) {
-        const fm = fmMatch[1]
-        body.value = fmMatch[2]
-
-        const getField = (name: string) => {
-          const m = fm.match(new RegExp(`${name}:\\s*"(.+?)"`))
-          return m ? m[1] : ''
-        }
-        const getArray = (name: string) => {
-          const m = fm.match(new RegExp(`${name}:\\s*\\[([^\\]]+)\\]`))
-          return m ? m[1].split(',').map((s: string) => s.trim().replace(/"/g, '').replace(/'/g, '')).join(', ') : ''
-        }
-
-        title.value = getField('title')
-        date.value = getField('date') || date.value
-        category.value = getField('category')
-        tags.value = getArray('tags')
-        excerpt.value = getField('excerpt')
-        slug.value = route.params.slug as string
+      const res = await fetch(`/api/posts/${route.params.slug}`)
+      if (res.ok) {
+        const data = await res.json()
+        title.value = data.title
+        date.value = data.date
+        category.value = data.category
+        tags.value = Array.isArray(data.tags) ? data.tags.join(', ') : data.tags
+        excerpt.value = data.excerpt
+        body.value = data.content
+        slug.value = data.slug
+        publishStatus.value = data.status || 'published'
       }
-    } catch { /* will fail if post doesn't exist */ }
+    } catch { /* ignore */ }
   }
 })
 
-// Build full markdown content
-function buildContent(): string {
-  const tagsArr = tags.value
-    .split(/[,，]/)
-    .map(t => t.trim())
-    .filter(Boolean)
-    .map(t => `"${t}"`)
-
-  return [
-    '---',
-    `title: "${title.value}"`,
-    `date: "${date.value}"`,
-    `category: "${category.value}"`,
-    `tags: [${tagsArr.join(', ')}]`,
-    `excerpt: "${excerpt.value}"`,
-    '---',
-    '',
-    body.value,
-  ].join('\n')
+function buildPayload() {
+  return {
+    slug: slug.value,
+    title: title.value,
+    date: date.value,
+    category: category.value,
+    tags: tags.value.split(/[,，]/).map(t => t.trim()).filter(Boolean),
+    excerpt: excerpt.value,
+    content: body.value,
+    status: publishStatus.value,
+  }
 }
 
 async function handleSave() {
@@ -110,25 +96,55 @@ async function handleSave() {
   message.value = ''
 
   try {
-    const res = await fetch('/api/save-post', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slug: slug.value, content: buildContent() }),
+    const isNew = !isEdit.value
+    const url = isNew ? '/api/posts' : `/api/posts/${slug.value}`
+    const method = isNew ? 'POST' : 'PUT'
+
+    const res = await fetch(url, {
+      method,
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildPayload()),
     })
     const data = await res.json()
-    if (data.ok) {
-      message.value = '文章保存成功！'
-      if (!isEdit.value) {
-        // Redirect to edit mode
+
+    if (res.ok) {
+      const statusText = publishStatus.value === 'draft' ? '（草稿）' : ''
+      message.value = `文章保存成功！${statusText}`
+      if (isNew) {
         router.replace(`/admin/${data.slug}`)
       }
     } else {
       message.value = `保存失败：${data.error}`
     }
-  } catch (e) {
-    message.value = `请求失败：${String(e)}`
+  } catch {
+    message.value = '网络错误，请确保后端已启动'
   } finally {
     saving.value = false
+  }
+}
+
+async function handleDelete() {
+  if (!isEdit.value) return
+  if (!confirm(`确定要删除文章「${title.value}」吗？`)) return
+
+  deleting.value = true
+  try {
+    const res = await fetch(`/api/posts/${slug.value}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    })
+    const data = await res.json()
+    if (data.ok) {
+      message.value = '文章已删除'
+      router.replace('/admin')
+      newPost()
+    } else {
+      message.value = `删除失败：${data.error}`
+    }
+  } catch {
+    message.value = '网络错误'
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -140,16 +156,28 @@ function newPost() {
   tags.value = ''
   excerpt.value = ''
   body.value = ''
+  publishStatus.value = 'published'
   message.value = ''
   router.replace('/admin')
+}
+
+function handleLogout() {
+  logout()
+  router.replace('/')
 }
 </script>
 
 <template>
   <div class="max-w-6xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold">{{ isEdit ? '编辑文章' : '写新文章' }}</h1>
+      <div>
+        <h1 class="text-2xl font-bold">{{ isEdit ? '编辑文章' : '写新文章' }}</h1>
+        <p class="text-xs text-gray-500 mt-1">作者：{{ user?.username }}</p>
+      </div>
       <div class="flex gap-3">
+        <button @click="handleLogout" class="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+          退出登录
+        </button>
         <button @click="newPost" class="px-3 py-1.5 text-sm border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
           新建文章
         </button>
@@ -163,19 +191,21 @@ function newPost() {
       </div>
     </div>
 
-    <p v-if="message" :class="message.includes('成功') ? 'text-green-600' : 'text-red-500'" class="mb-4 text-sm">
+    <p v-if="message" :class="message.includes('成功') || message.includes('已删除') ? 'text-green-600' : 'text-red-500'" class="mb-4 text-sm">
       {{ message }}
     </p>
 
-    <!-- Existing posts quick select -->
-    <div v-if="existingPosts.length > 0" class="mb-6">
-      <label class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">编辑已有文章</label>
+    <!-- My posts quick select -->
+    <div v-if="myPosts.length > 0" class="mb-6">
+      <label class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 block">我的文章</label>
       <select
         class="w-full sm:w-80 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
         @change="(e) => { const sel = (e.target as HTMLSelectElement).value; if (sel) router.push(`/admin/${sel}`) }"
       >
         <option value="">-- 选择文章 --</option>
-        <option v-for="p in existingPosts" :key="p.slug" :value="p.slug">{{ p.title }}</option>
+        <option v-for="p in myPosts" :key="p.slug" :value="p.slug">
+          {{ p.status === 'draft' ? '[草稿]' : '' }} {{ p.title }}
+        </option>
       </select>
     </div>
 
@@ -230,6 +260,13 @@ function newPost() {
           placeholder="文章简短描述..."
         />
       </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">状态</label>
+        <select v-model="publishStatus" class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm">
+          <option value="published">发布</option>
+          <option value="draft">草稿</option>
+        </select>
+      </div>
     </div>
 
     <!-- Editor + Preview -->
@@ -244,9 +281,7 @@ function newPost() {
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">实时预览</label>
-        <div
-          class="h-[500px] overflow-y-auto rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-4"
-        >
+        <div class="h-[500px] overflow-y-auto rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 p-4">
           <div v-if="body.trim()" class="prose max-w-none text-sm" v-html="previewHtml"></div>
           <p v-else class="text-gray-400 text-sm">在左侧输入 Markdown，这里将实时显示预览...</p>
         </div>
@@ -259,13 +294,21 @@ function newPost() {
         :disabled="saving"
         class="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
       >
-        {{ saving ? '保存中...' : '保存文章' }}
+        {{ saving ? '保存中...' : (publishStatus === 'draft' ? '保存草稿' : '发布文章') }}
       </button>
       <button @click="newPost" class="px-6 py-2 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
         清空重写
       </button>
-      <router-link v-if="slug" :to="`/post/${slug}`" target="_blank" class="px-6 py-2 text-center border border-green-300 text-green-600 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
-        查看文章 →
+      <button
+        v-if="isEdit"
+        @click="handleDelete"
+        :disabled="deleting"
+        class="px-6 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+      >
+        {{ deleting ? '删除中...' : '删除文章' }}
+      </button>
+      <router-link v-if="slug && publishStatus === 'published'" :to="`/post/${slug}`" target="_blank" class="px-6 py-2 text-center border border-green-300 text-green-600 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors">
+        查看文章 &rarr;
       </router-link>
     </div>
   </div>

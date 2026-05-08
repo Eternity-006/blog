@@ -9,6 +9,14 @@ defineProps<{ post: PostMeta }>()
   <article class="p-6 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/30 transition-all bg-white dark:bg-gray-800">
     <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3">
       <router-link
+        v-if="post.author"
+        :to="`/user/${post.author}`"
+        class="font-medium text-primary hover:underline"
+      >
+        {{ post.author }}
+      </router-link>
+      <span v-if="post.author">|</span>
+      <router-link
         :to="`/category/${post.category}`"
         class="font-medium text-primary hover:underline"
       >
@@ -36,7 +44,7 @@ defineProps<{ post: PostMeta }>()
       :to="`/post/${post.slug}`"
       class="inline-block mt-4 text-sm font-medium text-primary hover:underline"
     >
-      阅读全文 →
+      阅读全文 &rarr;
     </router-link>
   </article>
 </template>

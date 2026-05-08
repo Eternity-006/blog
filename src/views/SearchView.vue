@@ -4,7 +4,6 @@ import { useRoute } from 'vue-router'
 import type { PostMeta } from '@/types/post'
 import { useSearch } from '@/composables/useSearch'
 import PostCard from '@/components/PostCard.vue'
-import TagBadge from '@/components/TagBadge.vue'
 
 const route = useRoute()
 const { searchQuery, results, setPosts } = useSearch()
@@ -13,14 +12,24 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
-    allPosts.value = await res.json()
-    setPosts(allPosts.value)
-  } finally {
-    loading.value = false
+    const res = await fetch('/api/posts')
+    if (res.ok) {
+      allPosts.value = await res.json()
+      setPosts(allPosts.value)
+      loading.value = false
+    } else {
+      throw new Error('API unavailable')
+    }
+  } catch {
+    try {
+      const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
+      allPosts.value = await res.json()
+      setPosts(allPosts.value)
+    } finally {
+      loading.value = false
+    }
   }
 
-  // Get query from URL
   const q = route.query.q as string
   if (q) {
     searchQuery.value = q

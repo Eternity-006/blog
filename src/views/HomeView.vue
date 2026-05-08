@@ -6,13 +6,22 @@ import PostList from '@/components/PostList.vue'
 const posts = ref<PostMeta[]>([])
 const loading = ref(true)
 
+async function fetchFromJson() {
+  const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
+  const data = await res.json()
+  posts.value = data.sort((a: PostMeta, b: PostMeta) => new Date(b.date).getTime() - new Date(a.date).getTime())
+}
+
 onMounted(async () => {
   try {
-    const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
-    posts.value = await res.json()
-    posts.value.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    const res = await fetch('/api/posts')
+    if (res.ok) {
+      posts.value = await res.json()
+    } else {
+      await fetchFromJson()
+    }
   } catch {
-    console.error('Failed to load posts index')
+    await fetchFromJson()
   } finally {
     loading.value = false
   }

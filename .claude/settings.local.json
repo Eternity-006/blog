@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install *)",
+      "Bash(python app.py)",
+      "Read(//c/Users/12909/AppData/Local/Temp/claude/c--Users-12909-Desktop-blog/3861be5b-4a8e-410a-b717-a25eab1a8dd3/tasks/**)",
+      "Read(//tmp/**)",
+      "Bash(curl -s http://localhost:5000/api/posts)",
+      "Bash(curl -s -X POST http://localhost:5000/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"username\\\\\":\\\\\"admin\\\\\",\\\\\"password\\\\\":\\\\\"admin\\\\\"}\")",
+      "Bash(curl -s http://localhost:5000/api/posts/getting-started-vue3-composition-api)",
+      "Bash(npm run *)",
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(python backend/app.py)",
+      "Bash(curl -s http://localhost:5000/api/users/alice)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('User:', d['user']['username']\\); print\\('Posts:', len\\(d['posts']\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:5000/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin\"}')",
+      "Bash(curl -s http://localhost:5000/api/admin/stats -H \"Authorization: Bearer $\\(curl -s -X POST http://localhost:5000/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin\"}')",
+      "Bash(python -c \"import sys,json; posts=json.load\\(sys.stdin\\); [print\\(p['author'] + ': ' + p['title']\\) for p in posts]\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('User:', d['user']['username'], 'Posts:', len\\(d['posts']\\)\\)\")",
+      "Bash(curl -s -X POST http://localhost:5000/api/comments/hello-world -H \"Content-Type: application/json\" -d '{\"author\":\"bob\",\"content\":\"Nice post Alice!\"}')"
+    ]
+  }
+}

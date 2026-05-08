@@ -5,8 +5,13 @@ export interface PostMeta {
   category: string
   tags: string[]
   excerpt: string
+  author?: string
+  user_id?: number
+  status?: string
 }
 
 export interface Post extends PostMeta {
   html: string
+  content?: string
+  views?: number
 }

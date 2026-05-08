@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: blog-platform
+    env: python
+    region: singapore
+    buildCommand: |
+      pip install -r backend/requirements.txt
+      npm ci && npm run build
+    startCommand: cd backend && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true

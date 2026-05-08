@@ -5,11 +5,16 @@ import { resolve } from 'path'
 import { postApi } from './scripts/post-api'
 
 export default defineConfig({
-  base: '/blog/',
+  base: process.env.VITE_BASE || '/',
   plugins: [vue(), tailwindcss(), postApi()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
+    },
+  },
+  server: {
+    proxy: {
+      '/api': 'http://localhost:5000',
     },
   },
 })
