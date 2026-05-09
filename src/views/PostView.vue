@@ -6,26 +6,65 @@ import type { Post } from '@/types/post'
 import TagBadge from '@/components/TagBadge.vue'
 import TOC from '@/components/TOC.vue'
 import CommentSection from '@/components/CommentSection.vue'
+import RelatedPosts from '@/components/RelatedPosts.vue'
 import { api } from '@/api'
 import { useCodeCopy } from '@/composables/useCodeCopy'
+import { useAuth } from '@/composables/useAuth'
+import { useToast } from '@/composables/useToast'
 
 const route = useRoute()
+const { isLoggedIn, authHeaders } = useAuth()
+const toast = useToast()
 const post = ref<Post | null>(null)
 const headings = ref<{ id: string; text: string; level: number }[]>([])
 const loading = ref(true)
 const error = ref('')
 const progress = ref(0)
+const favorited = ref(false)
+const favoriteToggling = ref(false)
 
 const readingTime = computed(() => {
   if (!post.value?.content) return 1
   return estimateReadingTime(post.value.content)
 })
 
-// Scroll progress
 function onScroll() {
   const scrollTop = window.scrollY
   const docHeight = document.documentElement.scrollHeight - window.innerHeight
   progress.value = docHeight > 0 ? Math.min(100, (scrollTop / docHeight) * 100) : 0
+}
+
+async function checkFavorite(slug: string) {
+  if (!isLoggedIn.value) return
+  try {
+    const res = await api(`/api/favorites/${slug}`, { headers: authHeaders() })
+    if (res.ok) {
+      const data = await res.json()
+      favorited.value = data.favorited
+    }
+  } catch { /* ignore */ }
+}
+
+async function toggleFavorite() {
+  if (!isLoggedIn.value) {
+    toast.info('请先登录')
+    return
+  }
+  favoriteToggling.value = true
+  try {
+    const res = await api(`/api/favorites/${route.params.slug as string}`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      favorited.value = data.favorited
+      toast.success(data.favorited ? '已收藏' : '已取消收藏')
+    }
+  } catch {
+    toast.error('操作失败')
+  }
+  favoriteToggling.value = false
 }
 
 onMounted(async () => {
@@ -65,18 +104,16 @@ onMounted(async () => {
     el.id = id
   })
 
-  // Enable code copy buttons
   useCodeCopy()
-
   document.title = `${post.value.title} | 博客平台`
   loading.value = false
-
   window.addEventListener('scroll', onScroll, { passive: true })
+
+  checkFavorite(slug)
 })
 </script>
 
 <template>
-  <!-- Reading progress bar -->
   <div class="fixed top-0 left-0 h-0.5 bg-gradient-to-r from-primary to-purple-500 z-[60] transition-all duration-150" :style="{ width: progress + '%' }" />
 
   <div v-if="loading" class="text-center py-20">
@@ -98,6 +135,14 @@ onMounted(async () => {
       <router-link to="/" class="text-sm text-gray-500 hover:text-primary transition-colors mb-4 inline-block">
         &larr; 返回首页
       </router-link>
+
+      <img
+        v-if="post?.cover_image"
+        :src="post.cover_image"
+        :alt="post?.title"
+        class="w-full max-h-80 object-cover rounded-xl mb-6"
+      />
+
       <h1 class="text-3xl sm:text-4xl font-bold mb-4">{{ post?.title }}</h1>
       <div class="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
         <router-link
@@ -109,7 +154,7 @@ onMounted(async () => {
         </router-link>
         <span v-if="post?.author">|</span>
         <router-link :to="`/category/${post?.category}`" class="text-primary hover:underline font-medium">
-          {{ post?.category }}
+          {{ post?.category || '未分类' }}
         </router-link>
         <span>|</span>
         <time :datetime="post?.date">{{ post?.date }}</time>
@@ -117,6 +162,16 @@ onMounted(async () => {
         <span>约 {{ readingTime }} 分钟</span>
         <span v-if="post?.views !== undefined">|</span>
         <span v-if="post?.views !== undefined">{{ post.views }} 次阅读</span>
+        <span>|</span>
+        <button
+          @click="toggleFavorite"
+          :disabled="favoriteToggling"
+          class="inline-flex items-center gap-1 text-sm transition-colors"
+          :class="favorited ? 'text-red-500' : 'text-gray-400 hover:text-red-400'"
+        >
+          <span>{{ favorited ? '♥' : '♡' }}</span>
+          <span>{{ favorited ? '已收藏' : '收藏' }}</span>
+        </button>
       </div>
       <div class="mt-3 flex flex-wrap gap-1.5">
         <TagBadge v-for="tag in post?.tags" :key="tag" :tag="tag" :clickable="true" />
@@ -132,6 +187,7 @@ onMounted(async () => {
 
       <div class="min-w-0 flex-1">
         <div class="prose max-w-none" v-html="post?.html"></div>
+        <RelatedPosts :slug="post?.slug || ''" />
         <CommentSection :post-slug="post?.slug || ''" />
       </div>
     </div>

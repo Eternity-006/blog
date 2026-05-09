@@ -13,7 +13,17 @@ const readingTime = computed(() => {
 </script>
 
 <template>
-  <article class="p-6 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/30 transition-all bg-white dark:bg-gray-800">
+  <article class="p-6 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-primary/30 dark:hover:border-primary/30 transition-all bg-white dark:bg-gray-800 relative">
+    <span v-if="post.pinned" class="absolute top-3 right-3 text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">置顶</span>
+
+    <img
+      v-if="post.cover_image"
+      :src="post.cover_image"
+      :alt="post.title"
+      class="w-full h-40 object-cover rounded-lg mb-4"
+      loading="lazy"
+    />
+
     <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3">
       <router-link
         v-if="post.author"
@@ -27,7 +37,7 @@ const readingTime = computed(() => {
         :to="`/category/${post.category}`"
         class="font-medium text-primary hover:underline"
       >
-        {{ post.category }}
+        {{ post.category || '未分类' }}
       </router-link>
       <span>|</span>
       <time :datetime="post.date">{{ post.date }}</time>

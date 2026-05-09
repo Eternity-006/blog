@@ -33,9 +33,11 @@ def init_db():
             category TEXT DEFAULT '',
             tags TEXT DEFAULT '',
             excerpt TEXT DEFAULT '',
+            cover_image TEXT DEFAULT '',
             date TEXT NOT NULL,
             user_id INTEGER NOT NULL REFERENCES users(id),
             status TEXT DEFAULT 'published',
+            pinned INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -45,6 +47,7 @@ def init_db():
             post_slug TEXT NOT NULL,
             author TEXT NOT NULL,
             content TEXT NOT NULL,
+            parent_id INTEGER,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -53,6 +56,27 @@ def init_db():
             post_slug TEXT NOT NULL,
             viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            post_slug TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, post_slug)
+        );
     """)
+
+    # Migrate existing databases that lack the newer columns
+    migrations = [
+        "ALTER TABLE posts ADD COLUMN cover_image TEXT DEFAULT ''",
+        "ALTER TABLE posts ADD COLUMN pinned INTEGER DEFAULT 0",
+        "ALTER TABLE comments ADD COLUMN parent_id INTEGER",
+    ]
+    for sql in migrations:
+        try:
+            conn.execute(sql)
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
     conn.commit()
     conn.close()

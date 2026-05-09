@@ -2,44 +2,48 @@
 import { computed, ref } from 'vue'
 import type { PostMeta } from '@/types/post'
 import PostCard from './PostCard.vue'
+import Pagination from './Pagination.vue'
 
-const props = defineProps<{ posts: PostMeta[]; pageSize?: number }>()
+const props = defineProps<{
+  posts: PostMeta[]
+  pageSize?: number
+  totalPages?: number
+  currentPage?: number
+}>()
 
-const pageSize = props.pageSize || 5
-const currentPage = ref(1)
+const emit = defineEmits<{
+  'page-change': [page: number]
+}>()
 
-const totalPages = computed(() => Math.ceil(props.posts.length / pageSize))
+const localPageSize = props.pageSize || 5
+const localCurrentPage = ref(1)
 
-const paginatedPosts = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return props.posts.slice(start, start + pageSize)
+const isServerPaginated = computed(() => props.totalPages !== undefined && props.currentPage !== undefined)
+
+const displayPosts = computed(() => {
+  if (isServerPaginated.value) return props.posts
+  const start = (localCurrentPage.value - 1) * localPageSize
+  return props.posts.slice(start, start + localPageSize)
 })
 
-function goPage(page: number) {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page
+const displayTotalPages = computed(() => {
+  if (isServerPaginated.value) return props.totalPages!
+  return Math.ceil(props.posts.length / localPageSize)
+})
+
+const displayCurrentPage = computed(() => {
+  if (isServerPaginated.value) return props.currentPage!
+  return localCurrentPage.value
+})
+
+function onPageChange(page: number) {
+  if (isServerPaginated.value) {
+    emit('page-change', page)
+  } else {
+    localCurrentPage.value = page
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 }
-
-const visiblePages = computed(() => {
-  const pages: (number | string)[] = []
-  const total = totalPages.value
-  const cur = currentPage.value
-
-  if (total <= 7) {
-    for (let i = 1; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1)
-    if (cur > 3) pages.push('...')
-    for (let i = Math.max(2, cur - 1); i <= Math.min(total - 1, cur + 1); i++) {
-      pages.push(i)
-    }
-    if (cur < total - 2) pages.push('...')
-    pages.push(total)
-  }
-  return pages
-})
 </script>
 
 <template>
@@ -49,40 +53,14 @@ const visiblePages = computed(() => {
     </div>
 
     <div v-else class="space-y-6">
-      <PostCard v-for="post in paginatedPosts" :key="post.slug" :post="post" />
+      <PostCard v-for="post in displayPosts" :key="post.slug" :post="post" />
     </div>
 
-    <!-- Pagination -->
-    <nav v-if="totalPages > 1" class="flex justify-center items-center gap-2 mt-10">
-      <button
-        @click="goPage(currentPage - 1)"
-        :disabled="currentPage === 1"
-        class="px-3 py-1.5 rounded-lg text-sm border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-      >
-        ← 上一页
-      </button>
-      <template v-for="page in visiblePages" :key="page">
-        <span v-if="page === '...'" class="px-2 text-gray-400">...</span>
-        <button
-          v-else
-          @click="goPage(page as number)"
-          :class="[
-            'px-3 py-1.5 rounded-lg text-sm border transition-colors',
-            currentPage === page
-              ? 'bg-primary text-white border-primary'
-              : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800',
-          ]"
-        >
-          {{ page }}
-        </button>
-      </template>
-      <button
-        @click="goPage(currentPage + 1)"
-        :disabled="currentPage === totalPages"
-        class="px-3 py-1.5 rounded-lg text-sm border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-      >
-        下一页 →
-      </button>
-    </nav>
+    <Pagination
+      v-if="displayTotalPages > 1"
+      :current-page="displayCurrentPage"
+      :total-pages="displayTotalPages"
+      @page-change="onPageChange"
+    />
   </div>
 </template>

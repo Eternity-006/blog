@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { PostMeta } from '@/types/post'
 import PostList from '@/components/PostList.vue'
@@ -18,22 +18,28 @@ const posts = computed(() =>
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 )
 
-onMounted(async () => {
+async function fetchPosts() {
+  loading.value = true
   try {
-    const res = await api('/api/posts')
+    const res = await api('/api/posts?per_page=100')
     if (res.ok) {
-      allPosts.value = await res.json()
-      loading.value = false
-      return
+      const data = await res.json()
+      allPosts.value = data.posts || data
     }
-  } catch { /* fallback */ }
-
-  try {
-    const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
-    allPosts.value = await res.json()
+  } catch {
+    try {
+      const res = await fetch(import.meta.env.BASE_URL + 'posts-index.json')
+      allPosts.value = await res.json()
+    } catch { /* ignore */ }
   } finally {
     loading.value = false
   }
+}
+
+onMounted(fetchPosts)
+
+watch(() => route.params.tag, () => {
+  fetchPosts()
 })
 </script>
 

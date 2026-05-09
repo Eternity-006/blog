@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import type { PostMeta } from '@/types/post'
 import PostList from '@/components/PostList.vue'
 import { api } from '@/api'
+import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
 const username = route.params.username as string
@@ -11,6 +12,10 @@ const posts = ref<PostMeta[]>([])
 const userInfo = ref<{ username: string; bio: string; created_at: string } | null>(null)
 const loading = ref(true)
 const error = ref('')
+const activeTab = ref<'posts' | 'favorites'>('posts')
+const favorites = ref<PostMeta[]>([])
+const favLoading = ref(false)
+const { isLoggedIn } = useAuth()
 
 onMounted(async () => {
   try {
@@ -27,6 +32,25 @@ onMounted(async () => {
   }
   loading.value = false
 })
+
+async function loadFavorites() {
+  if (!isLoggedIn.value || favLoading.value) return
+  favLoading.value = true
+  try {
+    const res = await api('/api/my/favorites', {
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` },
+    })
+    if (res.ok) {
+      favorites.value = await res.json()
+    }
+  } catch { /* ignore */ }
+  favLoading.value = false
+}
+
+function switchTab(tab: 'posts' | 'favorites') {
+  activeTab.value = tab
+  if (tab === 'favorites') loadFavorites()
+}
 </script>
 
 <template>
@@ -57,7 +81,30 @@ onMounted(async () => {
       <p v-if="userInfo?.bio" class="text-gray-600 dark:text-gray-400">{{ userInfo.bio }}</p>
     </section>
 
-    <h2 class="text-lg font-bold mb-4">文章 ({{ posts.length }})</h2>
-    <PostList :posts="posts" />
+    <!-- Tabs -->
+    <div class="flex gap-4 mb-6 border-b border-gray-200 dark:border-gray-700">
+      <button
+        @click="switchTab('posts')"
+        :class="activeTab === 'posts' ? 'border-b-2 border-primary text-primary' : 'text-gray-500'"
+        class="pb-2 px-1 text-sm font-medium"
+      >
+        文章 ({{ posts.length }})
+      </button>
+      <button
+        @click="switchTab('favorites')"
+        :class="activeTab === 'favorites' ? 'border-b-2 border-primary text-primary' : 'text-gray-500'"
+        class="pb-2 px-1 text-sm font-medium"
+      >
+        收藏的文章
+      </button>
+    </div>
+
+    <PostList v-if="activeTab === 'posts'" :posts="posts" />
+
+    <div v-if="activeTab === 'favorites'">
+      <div v-if="favLoading" class="text-center py-8 text-gray-500">加载中...</div>
+      <div v-else-if="favorites.length === 0" class="text-center py-8 text-gray-400">暂无收藏的文章</div>
+      <PostList v-else :posts="favorites" />
+    </div>
   </div>
 </template>

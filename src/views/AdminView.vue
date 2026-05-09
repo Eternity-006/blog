@@ -17,6 +17,7 @@ const date = ref(new Date().toISOString().split('T')[0])
 const category = ref('')
 const tags = ref('')
 const excerpt = ref('')
+const coverImage = ref('')
 const body = ref('')
 const publishStatus = ref<'published' | 'draft'>('published')
 const saving = ref(false)
@@ -45,7 +46,6 @@ watch(title, (val) => {
 const myPosts = ref<{ slug: string; title: string; status: string }[]>([])
 
 onMounted(async () => {
-  // Load my posts for quick edit
   try {
     const res = await api('/api/my/posts', { headers: authHeaders() })
     if (res.ok) {
@@ -56,7 +56,6 @@ onMounted(async () => {
     }
   } catch { /* ignore */ }
 
-  // Load existing post data if editing
   if (isEdit.value) {
     try {
       const res = await api(`/api/posts/${route.params.slug}`)
@@ -67,6 +66,7 @@ onMounted(async () => {
         category.value = data.category
         tags.value = Array.isArray(data.tags) ? data.tags.join(', ') : data.tags
         excerpt.value = data.excerpt
+        coverImage.value = data.cover_image || ''
         body.value = data.content
         slug.value = data.slug
         publishStatus.value = data.status || 'published'
@@ -83,6 +83,7 @@ function buildPayload() {
     category: category.value,
     tags: tags.value.split(/[,，]/).map(t => t.trim()).filter(Boolean),
     excerpt: excerpt.value,
+    cover_image: coverImage.value,
     content: body.value,
     status: publishStatus.value,
   }
@@ -156,6 +157,7 @@ function newPost() {
   category.value = ''
   tags.value = ''
   excerpt.value = ''
+  coverImage.value = ''
   body.value = ''
   publishStatus.value = 'published'
   router.replace('/admin')
@@ -246,6 +248,14 @@ function handleLogout() {
           v-model="tags"
           class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
           placeholder="vue, typescript"
+        />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">封面图 URL</label>
+        <input
+          v-model="coverImage"
+          class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+          placeholder="https://example.com/img.jpg"
         />
       </div>
       <div class="sm:col-span-2">

@@ -39,7 +39,9 @@ def post_row_to_dict(row):
         'tags': parse_tags(row['tags']),
         'excerpt': row['excerpt'],
         'content': row['content'],
+        'cover_image': _row_get(row, 'cover_image', ''),
         'status': _row_get(row, 'status', 'published'),
+        'pinned': bool(_row_get(row, 'pinned', 0)),
         'author': _row_get(row, 'author_username'),
         'user_id': row['user_id'],
     }
@@ -178,23 +180,43 @@ def list_posts():
     author = request.args.get('author', '')
     category = request.args.get('category', '')
     tag = request.args.get('tag', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
 
     query = """SELECT p.*, u.username as author_username
                FROM posts p JOIN users u ON p.user_id = u.id
                WHERE u.status = 'active'"""
     params = []
+    count_params = []
 
     if author:
         query += ' AND u.username = ?'
         params.append(author)
+        count_params.append(author)
     else:
         query += " AND p.status = 'published'"
 
     if category:
         query += ' AND p.category = ?'
         params.append(category)
+        count_params.append(category)
 
-    query += ' ORDER BY p.date DESC'
+    # Get total count before pagination
+    count_query = """SELECT COUNT(*) FROM posts p JOIN users u ON p.user_id = u.id
+                     WHERE u.status = 'active'"""
+    if author:
+        count_query += ' AND u.username = ?'
+    else:
+        count_query += " AND p.status = 'published'"
+    if category:
+        count_query += ' AND p.category = ?'
+
+    total = db.execute(count_query, count_params).fetchone()[0]
+
+    query += ' ORDER BY p.pinned DESC, p.date DESC'
+    query += ' LIMIT ? OFFSET ?'
+    params.append(per_page)
+    params.append((page - 1) * per_page)
 
     rows = db.execute(query, params).fetchall()
 
@@ -203,7 +225,13 @@ def list_posts():
         rows = [r for r in rows if tag in parse_tags(r['tags'])]
 
     db.close()
-    return jsonify([post_row_to_dict(r) for r in rows])
+    return jsonify({
+        'posts': [post_row_to_dict(r) for r in rows],
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': max(1, -(-total // per_page)),
+    })
 
 
 @app.route('/api/posts/<slug>', methods=['GET'])
@@ -256,12 +284,13 @@ def create_post():
     tags = ','.join(data.get('tags', [])) if isinstance(data.get('tags'), list) else data.get('tags', '')
 
     db.execute(
-        """INSERT INTO posts (slug, title, content, category, tags, excerpt, date, user_id, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        """INSERT INTO posts (slug, title, content, category, tags, excerpt, cover_image, date, user_id, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (slug, title, content,
          data.get('category', ''),
          tags,
          data.get('excerpt', ''),
+         data.get('cover_image', ''),
          data.get('date', ''),
          g.user['id'],
          data.get('status', 'published'))
@@ -292,13 +321,14 @@ def update_post(slug):
     tags = ','.join(data.get('tags', [])) if isinstance(data.get('tags'), list) else data.get('tags', '')
 
     db.execute(
-        """UPDATE posts SET title=?, content=?, category=?, tags=?, excerpt=?, date=?,
-           status=?, updated_at=CURRENT_TIMESTAMP WHERE slug=?""",
+        """UPDATE posts SET title=?, content=?, category=?, tags=?, excerpt=?, cover_image=?,
+           date=?, status=?, updated_at=CURRENT_TIMESTAMP WHERE slug=?""",
         (data.get('title', post['title']),
          data.get('content', post['content']),
          data.get('category', post['category']),
          tags,
          data.get('excerpt', post['excerpt']),
+         data.get('cover_image', _row_get(post, 'cover_image', '')),
          data.get('date', post['date']),
          data.get('status', post['status']),
          slug)
@@ -364,6 +394,7 @@ def create_comment(slug):
 
     author = data.get('author', '').strip()
     content = data.get('content', '').strip()
+    parent_id = data.get('parent_id')
 
     if not author:
         author = '匿名'
@@ -379,9 +410,16 @@ def create_comment(slug):
         db.close()
         return jsonify({'error': '文章不存在'}), 404
 
+    # Verify parent comment exists and belongs to same post
+    if parent_id is not None:
+        parent = db.execute('SELECT id FROM comments WHERE id = ? AND post_slug = ?', (parent_id, slug)).fetchone()
+        if not parent:
+            db.close()
+            return jsonify({'error': '父评论不存在'}), 404
+
     cursor = db.execute(
-        'INSERT INTO comments (post_slug, author, content) VALUES (?, ?, ?)',
-        (slug, author, content)
+        'INSERT INTO comments (post_slug, author, content, parent_id) VALUES (?, ?, ?, ?)',
+        (slug, author, content, parent_id)
     )
     comment_id = cursor.lastrowid
     db.commit()
@@ -507,13 +545,173 @@ def admin_delete_user(user_id):
 @admin_required
 def admin_list_posts():
     db = get_db()
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 10, type=int)
+
+    total = db.execute('SELECT COUNT(*) FROM posts').fetchone()[0]
+
     rows = db.execute(
         """SELECT p.*, u.username as author_username
            FROM posts p JOIN users u ON p.user_id = u.id
-           ORDER BY p.date DESC"""
+           ORDER BY p.pinned DESC, p.date DESC
+           LIMIT ? OFFSET ?""",
+        (per_page, (page - 1) * per_page)
+    ).fetchall()
+    db.close()
+    return jsonify({
+        'posts': [post_row_to_dict(r) for r in rows],
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'total_pages': max(1, -(-total // per_page)),
+    })
+
+# ── Pin post (admin) ─────────────────────────────────
+
+@app.route('/api/admin/posts/<slug>/pin', methods=['POST'])
+@admin_required
+def toggle_pin(slug):
+    db = get_db()
+    post = db.execute('SELECT id, pinned FROM posts WHERE slug = ?', (slug,)).fetchone()
+    if not post:
+        db.close()
+        return jsonify({'error': '文章不存在'}), 404
+
+    new_pinned = 0 if post['pinned'] else 1
+    db.execute('UPDATE posts SET pinned = ? WHERE slug = ?', (new_pinned, slug))
+    db.commit()
+    db.close()
+    return jsonify({'pinned': bool(new_pinned)})
+
+# ── Related posts ────────────────────────────────────
+
+@app.route('/api/posts/<slug>/related', methods=['GET'])
+def related_posts(slug):
+    db = get_db()
+    post = db.execute('SELECT tags FROM posts WHERE slug = ? AND status = ?', (slug, 'published')).fetchone()
+    if not post:
+        db.close()
+        return jsonify([])
+
+    tags = parse_tags(post['tags'])
+    if not tags:
+        db.close()
+        return jsonify([])
+
+    rows = db.execute(
+        "SELECT p.*, u.username as author_username FROM posts p JOIN users u ON p.user_id = u.id WHERE p.slug != ? AND p.status = 'published' AND u.status = 'active' ORDER BY p.date DESC",
+        (slug,)
+    ).fetchall()
+    db.close()
+
+    scored = []
+    for r in rows:
+        r_tags = parse_tags(r['tags'])
+        overlap = len(set(tags) & set(r_tags))
+        if overlap > 0:
+            scored.append((overlap, post_row_to_dict(r)))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return jsonify([item[1] for item in scored[:3]])
+
+# ── Favorites ────────────────────────────────────────
+
+@app.route('/api/favorites/<slug>', methods=['POST'])
+@login_required
+def toggle_favorite(slug):
+    db = get_db()
+    post = db.execute('SELECT id FROM posts WHERE slug = ?', (slug,)).fetchone()
+    if not post:
+        db.close()
+        return jsonify({'error': '文章不存在'}), 404
+
+    fav = db.execute(
+        'SELECT id FROM favorites WHERE user_id = ? AND post_slug = ?',
+        (g.user['id'], slug)
+    ).fetchone()
+
+    if fav:
+        db.execute('DELETE FROM favorites WHERE id = ?', (fav['id'],))
+        db.commit()
+        db.close()
+        return jsonify({'favorited': False})
+    else:
+        db.execute(
+            'INSERT INTO favorites (user_id, post_slug) VALUES (?, ?)',
+            (g.user['id'], slug)
+        )
+        db.commit()
+        db.close()
+        return jsonify({'favorited': True})
+
+@app.route('/api/favorites/<slug>', methods=['GET'])
+@login_required
+def check_favorite(slug):
+    db = get_db()
+    fav = db.execute(
+        'SELECT id FROM favorites WHERE user_id = ? AND post_slug = ?',
+        (g.user['id'], slug)
+    ).fetchone()
+    db.close()
+    return jsonify({'favorited': bool(fav)})
+
+@app.route('/api/my/favorites', methods=['GET'])
+@login_required
+def my_favorites():
+    db = get_db()
+    rows = db.execute(
+        """SELECT p.*, u.username as author_username, f.created_at as fav_date
+           FROM favorites f
+           JOIN posts p ON f.post_slug = p.slug
+           JOIN users u ON p.user_id = u.id
+           WHERE f.user_id = ?
+           ORDER BY f.created_at DESC""",
+        (g.user['id'],)
     ).fetchall()
     db.close()
     return jsonify([post_row_to_dict(r) for r in rows])
+
+# ── RSS ──────────────────────────────────────────────
+
+@app.route('/api/rss', methods=['GET'])
+def rss_feed():
+    from xml.etree.ElementTree import Element, SubElement, tostring
+    from xml.dom import minidom
+
+    db = get_db()
+    rows = db.execute(
+        """SELECT p.slug, p.title, p.excerpt, p.date, p.content, u.username
+           FROM posts p JOIN users u ON p.user_id = u.id
+           WHERE p.status = 'published' AND u.status = 'active'
+           ORDER BY p.date DESC LIMIT 20"""
+    ).fetchall()
+    db.close()
+
+    rss = Element('rss', {'version': '2.0', 'xmlns:atom': 'http://www.w3.org/2005/Atom'})
+    channel = SubElement(rss, 'channel')
+    SubElement(channel, 'title').text = '博客平台'
+    SubElement(channel, 'link').text = request.host_url
+    SubElement(channel, 'description').text = '分享技术，记录生活'
+    SubElement(channel, 'language').text = 'zh-CN'
+
+    atom_link = SubElement(channel, 'atom:link')
+    atom_link.set('href', request.host_url.rstrip('/') + '/api/rss')
+    atom_link.set('rel', 'self')
+    atom_link.set('type', 'application/rss+xml')
+
+    for row in rows:
+        item = SubElement(channel, 'item')
+        SubElement(item, 'title').text = row['title']
+        SubElement(item, 'link').text = request.host_url + '#/post/' + row['slug']
+        SubElement(item, 'guid').text = row['slug']
+        SubElement(item, 'pubDate').text = row['date']
+        SubElement(item, 'author').text = row['username']
+        desc = row['excerpt'] or row['content'][:200]
+        SubElement(item, 'description').text = desc
+
+    raw = tostring(rss, encoding='unicode')
+    dom = minidom.parseString(raw)
+    return dom.toxml(encoding='utf-8'), 200, {'Content-Type': 'application/xml; charset=utf-8'}
 
 # ── Migrate markdown posts ───────────────────────────
 

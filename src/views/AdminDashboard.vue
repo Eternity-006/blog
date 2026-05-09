@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuth } from '@/composables/useAuth'
 import { api } from '@/api'
+import Pagination from '@/components/Pagination.vue'
 
 const { isAdmin, authHeaders } = useAuth()
 
@@ -15,7 +16,7 @@ interface AdminUser {
 }
 interface AdminPost {
   slug: string; title: string; author: string; status: string; date: string
-  category: string
+  category: string; pinned: boolean
 }
 
 const stats = ref<Stats>({ users: 0, posts: 0, published: 0, drafts: 0, comments: 0, views: 0 })
@@ -24,6 +25,8 @@ const allPosts = ref<AdminPost[]>([])
 const loading = ref(true)
 const activeTab = ref<'users' | 'posts'>('users')
 const message = ref('')
+const postPage = ref(1)
+const postTotalPages = ref(1)
 
 async function fetchData() {
   try {
@@ -31,11 +34,15 @@ async function fetchData() {
     const [statsRes, usersRes, postsRes] = await Promise.all([
       api('/api/admin/stats', { headers: h }),
       api('/api/admin/users', { headers: h }),
-      api('/api/admin/posts', { headers: h }),
+      api(`/api/admin/posts?page=${postPage.value}&per_page=10`, { headers: h }),
     ])
     if (statsRes.ok) stats.value = await statsRes.json()
     if (usersRes.ok) users.value = await usersRes.json()
-    if (postsRes.ok) allPosts.value = await postsRes.json()
+    if (postsRes.ok) {
+      const data = await postsRes.json()
+      allPosts.value = data.posts
+      postTotalPages.value = data.total_pages
+    }
   } catch { /* ignore */ }
   loading.value = false
 }
@@ -100,6 +107,20 @@ async function resetPassword(user: AdminUser) {
   } catch { /* ignore */ }
 }
 
+async function togglePin(post: AdminPost) {
+  try {
+    const res = await api(`/api/admin/posts/${post.slug}/pin`, {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      post.pinned = data.pinned
+      message.value = post.pinned ? `「${post.title}」已置顶` : `「${post.title}」已取消置顶`
+    }
+  } catch { /* ignore */ }
+}
+
 async function deletePost(post: AdminPost) {
   if (!confirm(`确定删除文章「${post.title}」吗？`)) return
   try {
@@ -113,6 +134,11 @@ async function deletePost(post: AdminPost) {
       await fetchData()
     }
   } catch { /* ignore */ }
+}
+
+function onPostPageChange(page: number) {
+  postPage.value = page
+  fetchData()
 }
 </script>
 
@@ -237,6 +263,7 @@ async function deletePost(post: AdminPost) {
                 <router-link :to="`/post/${p.slug}`" class="text-primary hover:underline font-medium">
                   {{ p.title }}
                 </router-link>
+                <span v-if="p.pinned" class="text-xs text-red-500 ml-1">[置顶]</span>
               </td>
               <td class="py-3 pr-4">
                 <router-link :to="`/user/${p.author}`" class="text-gray-500 hover:text-primary">{{ p.author }}</router-link>
@@ -249,11 +276,21 @@ async function deletePost(post: AdminPost) {
               </td>
               <td class="py-3 pr-4 text-gray-500 text-xs">{{ p.date }}</td>
               <td class="py-3">
-                <button @click="deletePost(p)" class="text-xs text-red-400 hover:underline">删除</button>
+                <div class="flex gap-2">
+                  <button @click="togglePin(p)" class="text-xs text-orange-500 hover:underline">
+                    {{ p.pinned ? '取消置顶' : '置顶' }}
+                  </button>
+                  <button @click="deletePost(p)" class="text-xs text-red-400 hover:underline">删除</button>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
+        <Pagination
+          :current-page="postPage"
+          :total-pages="postTotalPages"
+          @page-change="onPostPageChange"
+        />
       </div>
     </template>
   </div>

@@ -14,9 +14,10 @@ const loading = ref(true)
 
 onMounted(async () => {
   try {
-    const res = await api('/api/posts')
+    const res = await api('/api/posts?per_page=100')
     if (res.ok) {
-      allPosts.value = await res.json()
+      const data = await res.json()
+      allPosts.value = data.posts || data
       setPosts(allPosts.value)
       loading.value = false
     } else {
